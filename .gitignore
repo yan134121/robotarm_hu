@@ -1,0 +1,6 @@
+build*/
+yolov5/
+.vscode/
+*.pro.user
+*.user
+*.pro.user.*
