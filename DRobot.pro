@@ -5,7 +5,7 @@ QT       += core
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 CONFIG += c++14
-CONFIG += release
+CONFIG += debug
 # Debug 模式保留 qDebug，Release 模式禁用
 CONFIG(debug, debug|release) {
     # Debug 模式，无需额外定义

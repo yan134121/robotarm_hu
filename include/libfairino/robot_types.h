@@ -46,7 +46,7 @@ typedef struct
 {
 	DescTran tran;      /* 笛卡尔空间位置  */
 	Rpy rpy;			/* 笛卡尔空间姿态  */
-} DescPose;
+}  DescPose;
 
 /**
  * @brief 扩展轴位置数据类型

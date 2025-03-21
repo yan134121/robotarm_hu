@@ -97,6 +97,10 @@ void CameraWorker::test_vis() {
     QImage image((const unsigned char*)(color_image_m.data), color_image_m.cols, color_image_m.rows, QImage::Format_RGB888);
     emit frameReady(image, frameCnt);
 
+
+    // 计算中心点
+        calculateCenterPoint();
+
     if (!detectJ) return;
 
     QString points;
@@ -122,4 +126,25 @@ void CameraWorker::test_vis() {
     mutex.unlock();
 
     emit pointsUpdated(points);
+}
+
+void CameraWorker::calculateCenterPoint() {
+    if (depth_image_m.empty()) return;
+
+    // Get the center of the depth frame
+    int center_x = depth_image_m.cols / 2;
+    int center_y = depth_image_m.rows / 2;
+
+
+    // Get depth value at the center
+    uint16_t depth_value = depth_image_m.at<uint16_t>(center_y, center_x);
+    float depth = depth_value * 0.001f; // Convert to meters
+
+    // Deproject pixel to 3D point in camera coordinate system
+    float pixel[2] = {(float)center_x, (float)center_y};
+    float point[3];
+    rs2_deproject_pixel_to_point(point, &intr, pixel, depth);
+
+    // Emit the center point data (depth and 3D coordinates)
+    emit centerPointUpdated(depth, point[0], point[1], point[2]);
 }

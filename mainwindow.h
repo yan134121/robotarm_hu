@@ -82,7 +82,7 @@ private slots:
     //线程
     void updateCameraFrame(const QImage& image, int frameRate); // 更新 GUI
     void updatePoints(const QString& points);                   // 更新目标点坐标
-
+    void on_centerPointUpdated(float depth, float x, float y, float z); //更新中心点信息
 
     //获取配置参数
     void get_setting_value();
@@ -177,6 +177,11 @@ private:
     QTimer *stateTime, *timer, *zeroTime, *FirstTime, *SenTime, *triTime, *fourTime, *fiveTime;
     QThread *cameraThread;       // 摄像头线程
     CameraWorker *cameraWorker;
+
+    float center_depth; // 储存中心点的深度信息
+    float center_x, center_y, center_z; // 储存中心点的位置
+    QMutex center_mutex; // 中心点的数据互斥锁
+
     QStringList portList;
     bool congrip = false;
     std::string classNamesPath;
@@ -220,9 +225,9 @@ private:
     DescPose tar_robotend;//当前抓取目标位置
     DescPose storepoint;//存储点位姿
     bool up = false;
-
+    int num = 0; //积木数量
     DescTran Jaw;//夹爪相对机械臂末端的位移
-
+    int blocklength = 70;//积木高度单位mm
 //    //预备点补偿
 //    float ResPointIncX;float ResPointIncY;float ResPointIncZ;
 //    //目标点补偿
@@ -244,5 +249,6 @@ private:
     float blendR = 200.0;
     uint8_t search = 0;
     ExaxisPos epos;
+    float center_def;//中心点的深度信息
 };
 #endif // MAINWINDOW_H

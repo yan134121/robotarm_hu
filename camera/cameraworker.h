@@ -29,9 +29,11 @@ signals:
     void frameReady(const QImage& image, int frameRate);
     void pointsUpdated(const QString& points);
     void finished(); // 用于线程完全退出时通知
+    void centerPointUpdated(float depth, float x, float y, float z); // New signal for center point data
 
 private:
     rs2::depth_frame getAlignedImages();
+    void calculateCenterPoint(); // New method to calculate center point data
 
     QTimer* timer;
     rs2::pipeline pipeDR;

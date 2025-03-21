@@ -252,7 +252,7 @@
        </size>
       </property>
       <property name="currentIndex">
-       <number>1</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="ArgInput">
        <property name="minimumSize">
@@ -930,10 +930,10 @@
                    <number>3</number>
                   </property>
                   <property name="minimum">
-                   <double>-360.000000000000000</double>
+                   <double>-1000.000000000000000</double>
                   </property>
                   <property name="maximum">
-                   <double>360.000000000000000</double>
+                   <double>1000.000000000000000</double>
                   </property>
                   <property name="value">
                    <double>0.000000000000000</double>
@@ -957,10 +957,10 @@
                    <number>3</number>
                   </property>
                   <property name="minimum">
-                   <double>-360.000000000000000</double>
+                   <double>-1000.000000000000000</double>
                   </property>
                   <property name="maximum">
-                   <double>360.000000000000000</double>
+                   <double>1000.000000000000000</double>
                   </property>
                   <property name="value">
                    <double>0.000000000000000</double>
@@ -984,10 +984,10 @@
                    <number>3</number>
                   </property>
                   <property name="minimum">
-                   <double>-360.000000000000000</double>
+                   <double>-1000.000000000000000</double>
                   </property>
                   <property name="maximum">
-                   <double>360.000000000000000</double>
+                   <double>1000.000000000000000</double>
                   </property>
                   <property name="value">
                    <double>0.000000000000000</double>

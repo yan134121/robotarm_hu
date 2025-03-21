@@ -78,6 +78,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(this, &MainWindow::stopCamera, cameraWorker, &CameraWorker::stopCamera);
     connect(cameraWorker, &CameraWorker::frameReady, this, &MainWindow::updateCameraFrame);
     connect(cameraWorker, &CameraWorker::pointsUpdated, this, &MainWindow::updatePoints);
+    connect(cameraWorker, &CameraWorker::centerPointUpdated, this, &MainWindow::on_centerPointUpdated);
     connect(cameraWorker, &CameraWorker::finished, this, []() {
     qDebug() << "CameraWorker signaled finished";
     });
@@ -88,6 +89,15 @@ MainWindow::MainWindow(QWidget *parent)
 
 }
 
+//使用相机线程更新中心点
+void MainWindow::on_centerPointUpdated(float depth, float x, float y, float z) {
+    QMutexLocker locker(&center_mutex); // Thread-safe access
+    center_depth = depth;
+    center_x = x;
+    center_y = y;
+    center_z = z;
+//    qDebug() << "Center point updated: depth=" << depth << ", x=" << x << ", y=" << y << ", z=" << z;
+}
 
 //初始化某些参数
 void MainWindow::init_parameters(){
@@ -403,12 +413,12 @@ void MainWindow::statetimeout(){
     ui->pitch_data->setText(QString::number(cur_pose_.rpy.ry,'f',2));
     ui->yaw_data->setText(QString::number(cur_pose_.rpy.rz,'f',2));
 
-    storepoint.tran.x = ui->store_x->value();
-    storepoint.tran.y = ui->store_y->value();
-    storepoint.tran.z = ui->store_z->value();
-    storepoint.rpy.rx = ui->store_rx->value();
-    storepoint.rpy.ry = ui->store_ry->value();
-    storepoint.rpy.rz = ui->store_rz->value();
+    //    storepoint.tran.x = ui->store_x->value();
+    //    storepoint.tran.y = ui->store_y->value();
+    //    storepoint.tran.z = ui->store_z->value();
+    //    storepoint.rpy.rx = ui->store_rx->value();
+    //    storepoint.rpy.ry = ui->store_ry->value();
+    //    storepoint.rpy.rz = ui->store_rz->value();
 
 
 }
@@ -687,12 +697,10 @@ void MainWindow::SenTimeout(){
         storepoint.tran.x = ui->store_x->value();
         storepoint.tran.y = ui->store_y->value();
         storepoint.tran.z = ui->store_z->value();
-//        storepoint.rpy.rx = ui->store_rx->value();
-//        storepoint.rpy.ry = ui->store_ry->value();
-//        storepoint.rpy.rz = ui->store_rz->value();
         storepoint.rpy.rx = 180;
         storepoint.rpy.ry = 0;
-        storepoint.rpy.rz = -45;
+        storepoint.rpy.rz = ui->store_rz->value();
+
 
         errno_t Arm_Err =  robot.MoveCart(&storepoint, tool, user, speed, acc, ovl, blendT, -1);
         if (Arm_Err != 0)
@@ -701,7 +709,7 @@ void MainWindow::SenTimeout(){
             return;
 
         }
-        triTime->start();//判断是否到达，同时打开夹爪
+        triTime->start(300);//判断是否到达，同时打开夹爪
 
     }
 }
@@ -712,12 +720,20 @@ void MainWindow::TriTimeout(){
     robot.GetRobotMotionDone(&state);
     if (state != 0) { // 运动完成
         triTime->stop();
-        //获取当前相机视觉中心的距离
-        uint16_t depth_value = depth_image_m.at<uint16_t>(240, 320);
-        float dis = depth_value * 0.001f;
-        float pixel[2] = {320, 240};
-        float p_c_obj_f[3];//相机坐标系下目标的位置
-        rs2_deproject_pixel_to_point(p_c_obj_f, &intr, pixel, dis);
+        sleep_cp(2000);
+        // Use the center point data from the camera thread
+        Eigen::Vector4d p_c_obj;
+
+        {
+            QMutexLocker locker(&center_mutex); // Thread-safe access
+            p_c_obj[0] = center_x*1000;
+            p_c_obj[1] = center_y*1000;
+            p_c_obj[2] = center_z*1000;//单位mm
+            p_c_obj[3] = 1;
+
+        }
+
+
         //此时获取了目标存点但是不能直接放，因为机械臂得到的是地面的点
         //要机械臂末端到这个点需要的一定距离，由于是垂直的所以需要测量夹爪加上木块总长L
         //这个值一般不固定，这是由于夹爪的抓取精度问题导致的
@@ -726,22 +742,23 @@ void MainWindow::TriTimeout(){
 
         //计算相机与机械臂末端的旋转变换，计算机械臂末端此时距离地面的距离h和对应的点T_end_obj
         //然后移动h-L-temp,在加上原来的点（x,y）就是目标点
-        Eigen::Vector4d p_c_obj;
-        p_c_obj[0] = p_c_obj_f[0]*1000;
-        p_c_obj[1] = p_c_obj_f[1]*1000;
-        p_c_obj[2] = p_c_obj_f[2]*1000;
-        p_c_obj[0] = 1;
+
         Eigen::Vector4d p_end_obj = T_end_c * p_c_obj;
-        p_end_obj[2] = p_end_obj[2] - 8 -210;//这里的210是夹爪加上积木的长度
+        qDebug() << "p_end_obj[x]:" << p_end_obj[0];
+        qDebug() << "p_end_obj[y]:" << p_end_obj[1];
+        qDebug() << "p_end_obj[z]:" << p_end_obj[2];
+
+        p_end_obj[2] = p_end_obj[2] - 8 - 210 - blocklength*num;//这里的210是夹爪加上积木的长度
         Eigen::Matrix4d T_base_end = DescPosetoMatrix(cur_pose_);
         Eigen::Vector4d p_base_obj = T_base_end * p_end_obj;
 
         //求解需要的关节角
+        //p_end_obj机械臂末端距离地面高度
         DescPose tarPT = cur_pose_;
-        tarPT.tran.x = p_base_obj[0];
-        tarPT.tran.y = p_base_obj[1];
         tarPT.tran.z = p_base_obj[2];
-
+        qDebug() << "tarPT.tran.x " << tarPT.tran.x;
+        qDebug() << "tarPT.tran.y " << tarPT.tran.y;
+        qDebug() << "tarPT.tran.z " << tarPT.tran.z;
         JointPos tar_angel = {0,0,0,0,0,0};
 
         Arm_Err = robot.GetInverseKin(0,&tarPT,-1,&tar_angel);
@@ -762,7 +779,8 @@ void MainWindow::TriTimeout(){
             ui->ArmState->setText("错误码："+ QString::number(Arm_Err));
             return;
         }
-
+        num++;//积木数+1
+        fourTime->start(300);
 
 
 
@@ -783,7 +801,11 @@ void MainWindow::TriTimeout(){
 //            fourTime->start(300);
 
 //        }
-//    }
+    }
+    else
+    {
+        qDebug() << "Robot still moving to 储存点 ";
+    }
 }
 
 void MainWindow::FourTimeout(){
@@ -791,10 +813,33 @@ void MainWindow::FourTimeout(){
     robot.GetRobotMotionDone(&state);
     if (state != 0) { // 运动完成
         fourTime->stop();
-        if (congrip)
+        on_OpenGrip_clicked();//打开夹爪
+        DescPose tarPT = cur_pose_;
+        tarPT.tran.z = tarPT.tran.z + 110 ;//上升110mm避免碰到积木
+        JointPos tar_angel = {0,0,0,0,0,0};
+
+        Arm_Err = robot.GetInverseKin(0,&tarPT,-1,&tar_angel);
+        if( Arm_Err != 0)
         {
-            fiveTime->start(300);
+            ui->PointCoord->clear();
+            ui->PointCoord->setText("错误码："+ QString::number(Arm_Err));
+            return;
         }
+        DescPose offset_pos;
+        memset(&offset_pos, 0, sizeof(DescPose));
+        memset(&epos, 0, sizeof(ExaxisPos));
+        robot.SetSpeed(speed);
+        int Arm_Err = robot.MoveL(&tar_angel, &tarPT, tool, user, vel, acc, ovl, blendR, &epos, search,flag, &offset_pos);
+        if( Arm_Err != 0)
+        {
+            ui->PointCoord->clear();
+            ui->PointCoord->setText("错误码："+ QString::number(Arm_Err));
+            return;
+        }
+
+    }
+    else{
+        qDebug() << "return outseting! ";
     }
 
 }
